@@ -165,6 +165,29 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 </style>
 </head>
 <body>
+<!-- Novaflow password gate (client-side; obscurity, not security) -->
+<div id="nfgate" style="position:fixed;inset:0;z-index:2147483647;background:#0b0e13;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <form id="nfgateform" style="background:#14181e;border:1px solid #262d36;border-radius:14px;padding:30px 28px;width:300px;text-align:center;box-shadow:0 12px 44px rgba(0,0,0,.55)">
+    <div style="width:34px;height:34px;border-radius:9px;margin:0 auto 16px;background:linear-gradient(135deg,#3b82f6,#a855f7)"></div>
+    <div style="color:#e7ebf0;font-weight:600;font-size:15px;margin-bottom:4px">Novaflow</div>
+    <div style="color:#8a949f;font-size:12px;margin-bottom:18px">This demo is password&nbsp;protected</div>
+    <input id="nfgatepw" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid #333b45;background:#0b0e13;color:#e7ebf0;font-size:14px;outline:none">
+    <div id="nfgateerr" style="color:#e0625f;font-size:11.5px;height:14px;margin-top:7px"></div>
+    <button type="submit" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:8px;background:#2563c9;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Enter</button>
+  </form>
+</div>
+<script>
+(function(){
+  var H="39c465cb7453c60e1acc43a6d40a70c3460ec01cd4fe6ca5afd9473027777d46",g=document.getElementById("nfgate");
+  function sha(s){return crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,"0")}).join("")});}
+  if(sessionStorage.getItem("nf_auth")===H){g.parentNode.removeChild(g);return;}
+  document.documentElement.style.overflow="hidden";
+  var f=document.getElementById("nfgateform"),pw=document.getElementById("nfgatepw"),err=document.getElementById("nfgateerr");
+  setTimeout(function(){pw.focus();},50);
+  f.addEventListener("submit",function(e){e.preventDefault();sha(pw.value).then(function(h){if(h===H){sessionStorage.setItem("nf_auth",H);document.documentElement.style.overflow="";g.parentNode.removeChild(g);}else{err.textContent="Incorrect password";pw.value="";pw.focus();}});});
+})();
+</script>
+
 
 <div class="glow"></div>
 <canvas id="scene"></canvas>
@@ -466,7 +489,7 @@ function play(){if(ended)return restart();playing=true;started=true;$('#ppIcon')
 function pause(){playing=false;$('#ppIcon').innerHTML='<path d="M8 5v14l11-7z"/>';}
 function toggle(){playing?pause():play();}
 function restart(){clock=0;ended=false;curCap=-1;conLines=-1;$('#endcard').classList.remove('show');play();}
-function onEnd(){ended=true;pause();$('#endcard').classList.add('show');}
+function onEnd(){ended=true;pause();$('#endcard').classList.add('show');clearTimeout(window._loopT);window._loopT=setTimeout(()=>{if(ended)restart();},4200);}
 $('#playBtn').onclick=play;$('#pp').onclick=toggle;$('#replayBtn').onclick=restart;$('#replay2').onclick=restart;
 $('#track').onclick=e=>{const r=$('#track').getBoundingClientRect();clock=clamp((e.clientX-r.left)/r.width,0,1)*DUR;ended=false;started=true;$('#endcard').classList.remove('show');hidePoster();$('#player').classList.add('show');$('#console').style.opacity=1;curCap=-1;conLines=-1;};
 document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(!started)play();else toggle();}});
@@ -475,7 +498,8 @@ window.addEventListener('resize',()=>{layout();});
 // deep-link / preview: ?t=SECONDS (paused) ; ?play=1 autostart
 const q=new URLSearchParams(location.search);
 if(q.has('t')){clock=clamp(parseFloat(q.get('t'))||0,0,DUR);started=true;hidePoster();$('#player').classList.add('show');$('#console').style.opacity=1;updateCaption(clock);}
-if(q.get('play')==='1')play();
+// autostart on load (the video is the star); ?t=SECONDS deep-links to a paused frame instead
+if(q.get('play')==='1'||!q.has('t'))setTimeout(play,400);
 })();
 </script>
 </body>

@@ -194,9 +194,33 @@ html[data-theme="dark"] .logbox{color:#9fd6b0}
 </style>
 </head>
 <body>
+<!-- Novaflow password gate (client-side; obscurity, not security) -->
+<div id="nfgate" style="position:fixed;inset:0;z-index:2147483647;background:#0b0e13;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <form id="nfgateform" style="background:#14181e;border:1px solid #262d36;border-radius:14px;padding:30px 28px;width:300px;text-align:center;box-shadow:0 12px 44px rgba(0,0,0,.55)">
+    <div style="width:34px;height:34px;border-radius:9px;margin:0 auto 16px;background:linear-gradient(135deg,#3b82f6,#a855f7)"></div>
+    <div style="color:#e7ebf0;font-weight:600;font-size:15px;margin-bottom:4px">Novaflow</div>
+    <div style="color:#8a949f;font-size:12px;margin-bottom:18px">This demo is password&nbsp;protected</div>
+    <input id="nfgatepw" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid #333b45;background:#0b0e13;color:#e7ebf0;font-size:14px;outline:none">
+    <div id="nfgateerr" style="color:#e0625f;font-size:11.5px;height:14px;margin-top:7px"></div>
+    <button type="submit" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:8px;background:#2563c9;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Enter</button>
+  </form>
+</div>
+<script>
+(function(){
+  var H="39c465cb7453c60e1acc43a6d40a70c3460ec01cd4fe6ca5afd9473027777d46",g=document.getElementById("nfgate");
+  function sha(s){return crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,"0")}).join("")});}
+  if(sessionStorage.getItem("nf_auth")===H){g.parentNode.removeChild(g);return;}
+  document.documentElement.style.overflow="hidden";
+  var f=document.getElementById("nfgateform"),pw=document.getElementById("nfgatepw"),err=document.getElementById("nfgateerr");
+  setTimeout(function(){pw.focus();},50);
+  f.addEventListener("submit",function(e){e.preventDefault();sha(pw.value).then(function(h){if(h===H){sessionStorage.setItem("nf_auth",H);document.documentElement.style.overflow="";g.parentNode.removeChild(g);}else{err.textContent="Incorrect password";pw.value="";pw.focus();}});});
+})();
+</script>
+
 <div class="app">
 
   <div class="titlebar">
+    <a class="tbtn" href="index.html" style="text-decoration:none" title="Back to the demo">←&nbsp;Back</a>
     <img class="logo" src="assets/logo-wordmark.png" alt="Novaflow">
     <span class="appname">Annotation&nbsp;<b>Workspace</b></span>
     <span class="chip" id="dsChip">pancreas E15.5 · — events · — genes</span>
@@ -557,10 +581,16 @@ function renderFitness(){
     const x=padL+rec.frac_in*pw, y=padT+ph-rec.max_other*ph;
     const rad=Math.max(2.5,Math.min(7,2+rec.fitness*1.6));
     fitPts.push({x,y,rad,rec});
-    fctx.globalAlpha=0.82;fctx.fillStyle=COL[rec.cell_type]||'#888';
+    const dim=S.selected&&rec.cell_type!==S.selected;
+    fctx.globalAlpha=dim?0.10:0.82;fctx.fillStyle=COL[rec.cell_type]||'#888';
     fctx.beginPath();fctx.arc(x,y,rad,0,6.283);fctx.fill();
-    fctx.globalAlpha=1;fctx.lineWidth=0.8;fctx.strokeStyle='rgba(0,0,0,.18)';fctx.stroke();
+    if(!dim){fctx.globalAlpha=1;fctx.lineWidth=0.8;fctx.strokeStyle='rgba(0,0,0,.18)';fctx.stroke();}
   });
+  fctx.globalAlpha=1;
+  // annotation: screening scope + specificity guide
+  fctx.fillStyle=cs.getPropertyValue('--ink-3').trim();fctx.font='10px '+cs.getPropertyValue('--mono');fctx.textAlign='left';
+  fctx.fillText(`${recs.length} candidates screened · ${D.n_genes.toLocaleString()} genes`,padL+6,padT+12);
+  fctx.fillText('↙ specific (low rival expression)',padL+6,padT+ph-8);
   fctx.restore();
 }
 fcv.addEventListener('mousemove',e=>{
@@ -757,6 +787,8 @@ function renderInspector(){
       </div>
       <h4>Pipeline stages</h4>
       ${STAGES.slice(1).map(s=>`<div class="kv"><span class="k">${s.name}</span><span class="v">${s.accKey?fmtPct(D.accuracies[s.accKey]):''}</span></div>`).join('')}
+      <h4>Agreement · ${stageName()} vs truth</h4>
+      ${(()=>{const A=agreement();return [['Macro-F1',f3(A.macroF)],['Balanced acc',fmtPct(A.balAcc)],["Cohen's κ",f3(A.kappa)],['ARI',f3(A.ari)],['NMI',f3(A.nmi)]].map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');})()}
       <h4>Agent self-diagnosis</h4>
       <div class="diagbox">
         <div class="dt">${dg.type} — F1 ${f3(dg.f1)}</div>
@@ -800,7 +832,7 @@ function syncPops(){
 }
 $('#popAll').addEventListener('click',()=>{if(S.hidden.size)S.hidden=new Set();else S.hidden=new Set(TYPES);syncPops();drawEmbedding();});
 
-function selectPop(t){S.selected=t;syncPops();renderInspector();if(S.view==='statistics')renderStatistics();drawEmbedding();setStatus(null);}
+function selectPop(t){S.selected=t;syncPops();renderInspector();if(S.view==='statistics')renderStatistics();else if(S.view==='fitness')renderFitness();else if(S.view==='confusion')renderConfusion();drawEmbedding();setStatus(null);}
 
 // =================== TABS / VIEW ===================
 function buildTabs(){
